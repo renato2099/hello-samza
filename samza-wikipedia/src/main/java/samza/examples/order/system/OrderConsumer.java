@@ -19,10 +19,6 @@
 
 package samza.examples.order.system;
 
-import java.sql.Date;
-import java.util.ArrayList;
-import java.util.List;
-
 import org.apache.samza.Partition;
 import org.apache.samza.metrics.MetricsRegistry;
 import org.apache.samza.system.IncomingMessageEnvelope;
@@ -32,42 +28,36 @@ import org.apache.samza.util.BlockingEnvelopeMap;
 import samza.examples.order.system.OrderFeed.OrderFeedRow;
 
 public class OrderConsumer extends BlockingEnvelopeMap {
-    private final List<String> channels;
     private final String systemName;
     private final OrderFeed feed;
+    SystemStreamPartition systemStreamPartition;
 
     public OrderConsumer(String systemName, OrderFeed feed,
             MetricsRegistry registry) {
-        this.channels = new ArrayList<String>();
         this.systemName = systemName;
         this.feed = feed;
-        createPartition();
-    }
-
-    private void createPartition() {
-        SystemStreamPartition systemStreamPartition = new SystemStreamPartition(
-                systemName, "order", new Partition(0));
-
-        try {
-            put(systemStreamPartition, new IncomingMessageEnvelope(
-                    systemStreamPartition, null, null, new OrderFeedRow(10, 10, 10, new Date(10), 10)));
-        } catch (Exception e) {
-            System.err.println(e);
-        }
-
     }
 
     @Override
     public void register(SystemStreamPartition systemStreamPartition,
             String startingOffset) {
-        super.register(systemStreamPartition, startingOffset);
-
-        channels.add(systemStreamPartition.getStream());
+        this.systemStreamPartition = new SystemStreamPartition(systemName, "order",
+                new Partition(0));
+        super.register(this.systemStreamPartition, startingOffset);
     }
 
     @Override
     public void start() {
         feed.start();
+        try {
+            OrderFeedRow row = (OrderFeedRow) feed.getNext();
+            if (row != null) {
+                put(systemStreamPartition, new IncomingMessageEnvelope(
+                        systemStreamPartition, null, null, row));
+            }
+        } catch (Exception e) {
+            System.err.println(e);
+        }
     }
 
     @Override
