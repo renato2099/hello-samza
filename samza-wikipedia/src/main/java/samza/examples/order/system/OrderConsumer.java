@@ -41,7 +41,7 @@ public class OrderConsumer extends BlockingEnvelopeMap {
     @Override
     public void register(SystemStreamPartition systemStreamPartition,
             String startingOffset) {
-        this.systemStreamPartition = new SystemStreamPartition(systemName,
+        this.systemStreamPartition= new SystemStreamPartition(systemName,
                 "order", new Partition(0));
         super.register(this.systemStreamPartition, startingOffset);
     }
@@ -51,9 +51,10 @@ public class OrderConsumer extends BlockingEnvelopeMap {
         feed.start();
         try {
             OrderFeedRow row = (OrderFeedRow) feed.getNext();
-            if (row != null) {
+            while (row != null) {
                 put(systemStreamPartition, new IncomingMessageEnvelope(
                         systemStreamPartition, null, null, row));
+                row = (OrderFeedRow) feed.getNext();
             }
         } catch (Exception e) {
             System.err.println(e);
