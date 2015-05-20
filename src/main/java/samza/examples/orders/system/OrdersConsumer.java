@@ -41,7 +41,7 @@ public class OrdersConsumer extends BlockingEnvelopeMap {
     public void register(SystemStreamPartition systemStreamPartition,
                          String startingOffset) {
         this.systemStreamPartition= new SystemStreamPartition(systemName,
-                "order", new Partition(0));
+                "orders", new Partition(0));
         super.register(this.systemStreamPartition, startingOffset);
     }
 
