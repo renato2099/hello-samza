@@ -36,19 +36,13 @@ public class RssSystemFactory implements SystemFactory {
 
   @Override
   public SystemConsumer getConsumer(String systemName, Config config, MetricsRegistry registry) {
-      String host = config.get("systems." + systemName + ".host");
-      int port = config.getInt("systems." + systemName + ".port");
-      String db = config.get("systems." + systemName + ".db");
-      String usr = config.get("systems." + systemName + ".usr");
-      String psw = config.get("systems." + systemName + ".psw");
-      //WikipediaFeed feed = new WikipediaFeed(host, port);
-      OrdersFeed feed = new OrdersFeed(host, port, db, usr, psw);
-
+      String urlsFileName = config.get("systems." + systemName + ".urls");
+//      OrdersFeed feed = new OrdersFeed(urlsFileName);
       return new RssConsumer(systemName, feed, registry);
   }
 
   @Override
   public SystemProducer getProducer(String systemName, Config config, MetricsRegistry registry) {
-    throw new SamzaException("You can't produce to an table read! How about making some inserts to the table, instead?");
+    throw new SamzaException("You can't produce to a RSS feed!");
   }
 }

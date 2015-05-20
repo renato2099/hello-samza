@@ -31,7 +31,7 @@ import java.util.Map;
 
 /**
  * This task is very simple. All it does is take messages that it receives, and
- * sends them to a Kafka topic called wikipedia-raw.
+ * sends them to a Kafka topic called rss-raw.
  */
 public class RssFeedStreamTask implements StreamTask {
   private static final SystemStream OUTPUT_STREAM = new SystemStream("kafka", "rss-raw");

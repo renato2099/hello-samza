@@ -41,7 +41,7 @@ public class RssConsumer extends BlockingEnvelopeMap {
     public void register(SystemStreamPartition systemStreamPartition,
                          String startingOffset) {
         this.systemStreamPartition= new SystemStreamPartition(systemName,
-                "orders", new Partition(0));
+                "rss", new Partition(0));
         super.register(this.systemStreamPartition, startingOffset);
     }
 
