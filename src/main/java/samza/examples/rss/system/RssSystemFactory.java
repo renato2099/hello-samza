@@ -38,7 +38,8 @@ public class RssSystemFactory implements SystemFactory {
   public SystemConsumer getConsumer(String systemName, Config config, MetricsRegistry registry) {
       String urlsFileName = config.get("systems." + systemName + ".urls");
 //      OrdersFeed feed = new OrdersFeed(urlsFileName);
-      return new RssConsumer(systemName, feed, registry);
+//      return new RssConsumer(systemName, feed, registry);
+      return null;
   }
 
   @Override
