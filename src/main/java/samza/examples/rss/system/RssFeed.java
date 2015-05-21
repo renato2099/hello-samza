@@ -19,6 +19,10 @@
 
 package samza.examples.rss.system;
 
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.DriverManager;
@@ -26,12 +30,17 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.prefs.Preferences;
 
 import org.apache.samza.SamzaException;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import samza.examples.rss.utils.FeedDetails;
 
 public class RssFeed {
     private static final Logger log = LoggerFactory.getLogger(RssFeed.class);
@@ -40,36 +49,52 @@ public class RssFeed {
     private Connection con = null;
     private Statement st = null;
     private ResultSet rs = null;
-    private final String host;
-    private final int port;
-    private final String database;
-    private final String user;
-    private final String password;
+    private final String urlsFilePath;
 
-    public RssFeed(String host, int port, String db, String usr, String psw) {
-        this.host = host;
-        this.port = port;
-        this.database = db;
-        this.user = usr;
-        this.password = psw;
+    public RssFeed(String urlsFilePath) {
+        this.urlsFilePath = urlsFilePath;
     }
 
     public void start() {
+        BlockingQueue<FeedDetails> feedDetails = readUrlFile();
+        while(!feedDetails.isEmpty()) {
+            System.out.println(feedDetails.poll());
+        }
+//        String url = "jdbc:mysql://" + host + ":" + String.valueOf(port) + "/"
+//                + database;
+//        try {
+//            Class.forName("com.mysql.jdbc.Driver");
+//            con = DriverManager.getConnection(url, user, password);
+//            st = con.createStatement();
+//            rs = st.executeQuery("SELECT * FROM `order`");
+//        } catch (SQLException e) {
+//            log.error(e.getMessage());
+//            e.printStackTrace();
+//        } catch (ClassNotFoundException e) {
+//            log.error("Error while starting.");
+//            e.printStackTrace();
+//        }
+    }
 
-        String url = "jdbc:mysql://" + host + ":" + String.valueOf(port) + "/"
-                + database;
+    private BlockingQueue<FeedDetails> readUrlFile() {
+        BlockingQueue<FeedDetails> rssQueue = new LinkedBlockingQueue<FeedDetails>();
         try {
-            Class.forName("com.mysql.jdbc.Driver");
-            con = DriverManager.getConnection(url, user, password);
-            st = con.createStatement();
-            rs = st.executeQuery("SELECT * FROM `order`");
-        } catch (SQLException e) {
-            log.error(e.getMessage());
+            List<String> readAllLines = Files.readAllLines(FileSystems
+                    .getDefault().getPath(this.urlsFilePath), Charset.defaultCharset());
+            for (String line : readAllLines) {
+                if (!line.startsWith("#")) {
+                    String[] split = line.split(",");
+                    rssQueue.put(new FeedDetails(split[0], split[1]));
+                }
+            }
+        } catch (IOException e) {
+            log.error("Error while reading RSS list file.");
             e.printStackTrace();
-        } catch (ClassNotFoundException e) {
-            log.error("Error while starting.");
+        } catch (InterruptedException e) {
+            log.error("Error while reading RSS list file.");
             e.printStackTrace();
         }
+        return rssQueue;
     }
 
     public void stop() {
@@ -229,14 +254,15 @@ public class RssFeed {
     }
 
     public static void main(String[] args) throws InterruptedException {
-
-        RssFeed feed = new RssFeed("localhost", 3306, "dw_samza", "root", "root");
+//
+        RssFeed feed = new RssFeed("/Users/renatomarroquin/Documents/workspace/workspaceApache/hello-samza/src/main/resources/rss.file");
         feed.start();
-        OrdersFeedRow or = feed.getNext();
-        while(or != null) {
-            System.out.println(or.toJson());
-            or = feed.getNext();
-        }
-        feed.stop();
+//        feed.start();
+//        OrdersFeedRow or = feed.getNext();
+//        while(or != null) {
+//            System.out.println(or.toJson());
+//            or = feed.getNext();
+//        }
+//        feed.stop();
     }
 }
