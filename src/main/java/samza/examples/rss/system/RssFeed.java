@@ -33,8 +33,8 @@ import org.codehaus.jackson.map.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class OrdersFeed {
-    private static final Logger log = LoggerFactory.getLogger(OrdersFeed.class);
+public class RssFeed {
+    private static final Logger log = LoggerFactory.getLogger(RssFeed.class);
     private static final ObjectMapper jsonMapper = new ObjectMapper();
 
     private Connection con = null;
@@ -46,7 +46,7 @@ public class OrdersFeed {
     private final String user;
     private final String password;
 
-    public OrdersFeed(String host, int port, String db, String usr, String psw) {
+    public RssFeed(String host, int port, String db, String usr, String psw) {
         this.host = host;
         this.port = port;
         this.database = db;
@@ -230,7 +230,7 @@ public class OrdersFeed {
 
     public static void main(String[] args) throws InterruptedException {
 
-        OrdersFeed feed = new OrdersFeed("localhost", 3306, "dw_samza", "root", "root");
+        RssFeed feed = new RssFeed("localhost", 3306, "dw_samza", "root", "root");
         feed.start();
         OrdersFeedRow or = feed.getNext();
         while(or != null) {

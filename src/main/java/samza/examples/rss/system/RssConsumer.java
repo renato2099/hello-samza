@@ -28,10 +28,10 @@ import samza.examples.orders.system.OrdersFeed.OrdersFeedRow;
 
 public class RssConsumer extends BlockingEnvelopeMap {
     private final String systemName;
-    private final OrdersFeed feed;
+    private final RssFeed feed;
     SystemStreamPartition systemStreamPartition;
 
-    public RssConsumer(String systemName, OrdersFeed feed,
+    public RssConsumer(String systemName, RssFeed feed,
                          MetricsRegistry registry) {
         this.systemName = systemName;
         this.feed = feed;
@@ -49,12 +49,12 @@ public class RssConsumer extends BlockingEnvelopeMap {
     public void start() {
         feed.start();
         try {
-            OrdersFeedRow row = (OrdersFeedRow) feed.getNext();
-            while (row != null) {
-                put(systemStreamPartition, new IncomingMessageEnvelope(
-                        systemStreamPartition, null, null, row));
-                row = (OrdersFeedRow) feed.getNext();
-            }
+//            OrdersFeedRow row = (OrdersFeedRow) feed.getNext();
+//            while (row != null) {
+//                put(systemStreamPartition, new IncomingMessageEnvelope(
+//                        systemStreamPartition, null, null, row));
+//                row = (OrdersFeedRow) feed.getNext();
+//            }
         } catch (Exception e) {
             System.err.println(e);
         }
