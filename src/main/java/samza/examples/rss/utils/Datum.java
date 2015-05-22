@@ -61,13 +61,10 @@ public class Datum implements Serializable {
         this.document = document;
         this.id = id;
         this.timestamp = timestamp;
-        this.sequenceid = sequenceid;
         this.metadata = new HashMap<String, Object>();
     }
 
     public DateTime timestamp;
-
-    public BigInteger sequenceid;
 
     public Map<String, Object> metadata;
 
@@ -81,14 +78,6 @@ public class Datum implements Serializable {
 
     public void setTimestamp(DateTime timestamp) {
         this.timestamp = timestamp;
-    }
-
-    public BigInteger getSequenceid() {
-        return sequenceid;
-    }
-
-    public void setSequenceid(BigInteger sequenceid) {
-        this.sequenceid = sequenceid;
     }
 
     public Map<String, Object> getMetadata() {
@@ -120,8 +109,7 @@ public class Datum implements Serializable {
         if(o instanceof Datum) {
             Datum that = (Datum) o;
             if(this.document != null && this.document.equals(that.document)) {
-                return (this.timestamp != null ? this.timestamp.equals(that.timestamp) : that.timestamp == null) &&
-                        (this.sequenceid != null ? this.sequenceid.equals(that.sequenceid) : that.sequenceid == null);
+                return (this.timestamp != null ? this.timestamp.equals(that.timestamp) : that.timestamp == null);
             }
             else {
                 return that.document == null && this.document == null;
@@ -134,7 +122,7 @@ public class Datum implements Serializable {
 
     @Override
     public String toString() {
-        return this.id+"\tDocument="+this.document+"\ttimestamp="+this.timestamp+"\tsequence="+this.sequenceid;
+        return this.id+"\tDocument="+this.document+"\ttimestamp="+this.timestamp;
     }
 
     /**
@@ -147,8 +135,6 @@ public class Datum implements Serializable {
 
         jsonObject.put("id", event.getId());
         jsonObject.put("document", event.getDocument());
-//        jsonObject.put("metadata", event.getMetadata());
-//        jsonObject.put("sequence_id", event.getSequenceid());
         jsonObject.put("timestamp", event.getTimestamp());
 
         return jsonObject;

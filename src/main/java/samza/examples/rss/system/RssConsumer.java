@@ -41,8 +41,6 @@ public class RssConsumer extends BlockingEnvelopeMap {
 
     public void onIncommingBatch(List<Datum> nextBatch) {
         try {
-            //rss should start polling
-//            List<Datum> nextBatch = feed.getNextBatch();
             //// every entry on the polled queue should be send as a message
             if (nextBatch != null) {
                 if (!nextBatch.isEmpty()) {
