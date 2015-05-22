@@ -26,9 +26,7 @@ import java.io.InputStreamReader;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -37,7 +35,6 @@ import com.sun.syndication.feed.synd.SyndEntry;
 import com.sun.syndication.feed.synd.SyndFeed;
 import com.sun.syndication.io.FeedException;
 import com.sun.syndication.io.SyndFeedInput;
-import org.codehaus.jackson.map.ObjectMapper;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
@@ -49,13 +46,11 @@ import samza.examples.rss.utils.SyndEntrySerializer;
 
 public class RssFeed {
     private static final Logger log = LoggerFactory.getLogger(RssFeed.class);
-    private static final ObjectMapper jsonMapper = new ObjectMapper();
 
     private final String urlsFilePath;
     private final int timeOut;
     private final int waitTime;
     private List<FeedDetails> feedDetails;
-    private BlockingQueue<Datum> dataQueue;
     private SyndEntrySerializer serializer;
     private DateTime publishedSince;
 
@@ -66,24 +61,33 @@ public class RssFeed {
 
     protected static final Map<String, Set<String>> PREVIOUSLY_SEEN = new ConcurrentHashMap<>();
 
-    public RssFeed(String urlsFilePath, int timeOut, int waittime) {
+    /**
+     * Constructor
+     * @param urlsFilePath
+     * @param timeOut
+     * @param waitTime
+     */
+    public RssFeed(String urlsFilePath, int timeOut, int waitTime) {
         this.urlsFilePath = urlsFilePath;
         this.timeOut = timeOut;
-        this.waitTime = waittime;
+        this.waitTime = waitTime;
         this.serializer = new SyndEntrySerializer();
-        this.dataQueue = new LinkedBlockingQueue<>();
         // TODO pass this as a parameter?
         this.publishedSince = new DateTime().withYear(2014)
                 .withDayOfMonth(5).withMonthOfYear(9)
                 .withZone(DateTimeZone.UTC);
     }
 
+    /**
+     * Starts the feed reader
+     */
     public void start() {
         feedDetails = readUrlFile();
     }
 
     /**
      * Reads assigned URLs file from classpath
+     *
      * @return
      */
     private List<FeedDetails> readUrlFile() {
@@ -106,26 +110,31 @@ public class RssFeed {
         return rssQueue;
     }
 
+    /**
+     * Stops the feed reader
+     */
     public void stop() {
         log.info("Stoping RssFeed consumer.");
     }
 
     /**
      * Gets the next batch of feeds from URLs
+     *
      * @return
      */
-    public Set<String> getNextBatch() {
+    public List<Datum> getNextBatch() {
         FeedDetails feedDetail = null;
-        Set<String> batch = Sets.newConcurrentHashSet();
+        Set<String> batch = null;
         Iterator<FeedDetails> it = feedDetails.iterator();
-        while(it.hasNext()) {
+        List<Datum> dataQueue = new ArrayList<>();
+        while (it.hasNext()) {
             try {
                 feedDetail = it.next();
                 // if enough time has passed, then read again
                 long elapsedTime = (System.currentTimeMillis() - feedDetail.getLastPolled()) / 1000;
                 if (elapsedTime > feedDetail.getPollIntervalMillis()) {
                     // logging previously seen feeds
-                    queueFeedEntries(feedDetail, batch);
+                    batch = queueFeedEntries(feedDetail, dataQueue);
                     PREVIOUSLY_SEEN.put(feedDetail.getUrl(), batch);
                     // updating previously seen feeds
                     feedDetail.setLastPolled(System.currentTimeMillis());
@@ -144,29 +153,26 @@ public class RssFeed {
                 e.printStackTrace();
             }
         }
-        return batch;
+        return dataQueue;
     }
 
     /**
      * Reads the url and queues the data
      *
-     * @param feedDetail
-     *            feedDetails object
+     * @param feedDetail feedDetails object
      * @return set of all article urls that were read from the feed
-     * @throws IOException
-     *             when it cannot connect to the url or the url is malformed
-     * @throws com.sun.syndication.io.FeedException
-     *             when it cannot reed the feed.
+     * @throws IOException                          when it cannot connect to the url or the url is malformed
+     * @throws com.sun.syndication.io.FeedException when it cannot reed the feed.
      */
-    protected Set<String> queueFeedEntries(FeedDetails feedDetail, Set<String> batch) throws IOException,
+    protected Set<String> queueFeedEntries(FeedDetails feedDetail, List<Datum> dataQueue) throws IOException,
             FeedException {
         URL feedUrl = new URL(feedDetail.getUrl());
         URLConnection connection = feedUrl.openConnection();
         connection.setConnectTimeout(this.timeOut);
         connection.setConnectTimeout(this.timeOut);
         SyndFeedInput input = new SyndFeedInput();
-        SyndFeed feed = input.build(new InputStreamReader(connection
-                .getInputStream()));
+        SyndFeed feed = input.build(new InputStreamReader(connection.getInputStream()));
+        Set<String> batch = Sets.newConcurrentHashSet();
         for (Object entryObj : feed.getEntries()) {
             SyndEntry entry = (SyndEntry) entryObj;
             ObjectNode nodeEntry = this.serializer.deserialize(entry);
@@ -174,36 +180,29 @@ public class RssFeed {
             String entryId = determineId(nodeEntry);
             batch.add(entryId);
             Datum datum = new Datum(nodeEntry);
-            try {
-                JsonNode published = nodeEntry.get(DATE_KEY);
-                if (published != null) {
-                    try {
-                        DateTime date = RFC3339Utils.parseToUTC(published.asText());
-                        if (date.isAfter(this.publishedSince)
-                                && (!seenBefore(entryId, feedDetail.getUrl()))) {
-                            this.dataQueue.put(datum);
-                            log.debug("Added entry, {}, to provider queue.", entryId);
-                        }
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                    } catch (Exception e) {
-                        log.trace("Failed to parse date from object node, attempting to add node to queue by default.");
-                        if (!seenBefore(entryId, feedDetail.getUrl())) {
-                            this.dataQueue.put(datum);
-                            log.debug("Added entry, {}, to provider queue.", entryId);
-                        }
+            JsonNode published = nodeEntry.get(DATE_KEY);
+            if (published != null) {
+                try {
+                    DateTime date = RFC3339Utils.parseToUTC(published.asText());
+                    if (date.isAfter(this.publishedSince)
+                            && (!seenBefore(entryId, feedDetail.getUrl()))) {
+                        dataQueue.add(datum);
+                        log.debug("Added entry, {}, to provider queue.", entryId);
                     }
-                } else {
-                    log.debug("No published date present, attempting to add node to queue by default.");
+                } catch (Exception e) {
+                    log.trace("Failed to parse date from object node, attempting to add node to queue by default.");
                     if (!seenBefore(entryId, feedDetail.getUrl())) {
-                        this.dataQueue.put(datum);
-                        log.debug("Added entry, {}, to provider queue.",
-                                entryId);
+                        dataQueue.add(datum);
+                        log.debug("Added entry, {}, to provider queue.", entryId);
                     }
                 }
-            } catch (InterruptedException ie) {
-                log.error("Interupted Exception.");
-                Thread.currentThread().interrupt();
+            } else {
+                log.debug("No published date present, attempting to add node to queue by default.");
+                if (!seenBefore(entryId, feedDetail.getUrl())) {
+                    dataQueue.add(datum);
+                    log.debug("Added entry, {}, to provider queue.",
+                            entryId);
+                }
             }
         }
         return batch;

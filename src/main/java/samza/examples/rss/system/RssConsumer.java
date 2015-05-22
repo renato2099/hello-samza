@@ -24,11 +24,9 @@ import org.apache.samza.metrics.MetricsRegistry;
 import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.SystemStreamPartition;
 import org.apache.samza.util.BlockingEnvelopeMap;
-import samza.examples.orders.system.OrdersFeed.OrdersFeedRow;
 import samza.examples.rss.utils.Datum;
 
-import java.util.Set;
-import java.util.concurrent.BlockingQueue;
+import java.util.List;
 
 public class RssConsumer extends BlockingEnvelopeMap {
     private final String systemName;
@@ -54,14 +52,16 @@ public class RssConsumer extends BlockingEnvelopeMap {
         feed.start();
         try {
             //rss should start polling
-            BlockingQueue<Datum> nextBatch = feed.getNextBatch();
+            List<Datum> nextBatch = feed.getNextBatch();
             //// every entry on the polled queue should be send as a message
-//            OrdersFeedRow row = (OrdersFeedRow) feed.getNext();
-//            while (row != null) {
-//                put(systemStreamPartition, new IncomingMessageEnvelope(
-//                        systemStreamPartition, null, null, row));
-//                row = (OrdersFeedRow) feed.getNext();
-//            }
+            if (nextBatch != null) {
+                for (Datum data : nextBatch) {
+                    put(systemStreamPartition, new IncomingMessageEnvelope(
+                        systemStreamPartition, null, null, data));
+                }
+            } else {
+                throw new IllegalStateException("The RSS batch should not be null");
+            }
         } catch (Exception e) {
             System.err.println(e);
         }
