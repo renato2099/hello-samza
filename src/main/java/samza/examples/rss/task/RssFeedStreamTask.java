@@ -26,6 +26,7 @@ import org.apache.samza.task.MessageCollector;
 import org.apache.samza.task.StreamTask;
 import org.apache.samza.task.TaskCoordinator;
 import samza.examples.orders.system.OrdersFeed.OrdersFeedRow;
+import samza.examples.rss.utils.Datum;
 
 import java.util.Map;
 
@@ -38,7 +39,7 @@ public class RssFeedStreamTask implements StreamTask {
 
   @Override
   public void process(IncomingMessageEnvelope envelope, MessageCollector collector, TaskCoordinator coordinator) {
-    Map<String, Object> outgoingMap = OrdersFeedRow.toMap((OrdersFeedRow) envelope.getMessage());
+    Map<String, Object> outgoingMap = Datum.toMap((Datum) envelope.getMessage());
     collector.send(new OutgoingMessageEnvelope(OUTPUT_STREAM, outgoingMap));
   }
 }

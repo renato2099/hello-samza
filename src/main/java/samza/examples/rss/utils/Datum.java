@@ -138,4 +138,20 @@ public class Datum implements Serializable {
         return this.id+"\tDocument="+this.document+"\ttimestamp="+this.timestamp+"\tsequence="+this.sequenceid;
     }
 
+    /**
+     * Converts a Datum into a map
+     * @param event
+     * @return
+     */
+    public static Map<String, Object> toMap(Datum event) {
+        Map<String, Object> jsonObject = new HashMap<String, Object>();
+
+        jsonObject.put("id", event.getId());
+        jsonObject.put("document", event.getDocument());
+        jsonObject.put("metadata", event.getMetadata());
+        jsonObject.put("sequence_id", event.getSequenceid());
+        jsonObject.put("timestamp", event.getTimestamp());
+
+        return jsonObject;
+    }
 }
