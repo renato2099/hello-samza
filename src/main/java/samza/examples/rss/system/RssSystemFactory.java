@@ -37,7 +37,9 @@ public class RssSystemFactory implements SystemFactory {
   @Override
   public SystemConsumer getConsumer(String systemName, Config config, MetricsRegistry registry) {
       String urlsFileName = config.get("systems." + systemName + ".urls");
-      RssFeed feed = new RssFeed(urlsFileName);
+      int timeout = config.getInt("systems." + systemName + ".timeout");
+      int waittime = config.getInt("systems." + systemName + ".waittime");
+      RssFeed feed = new RssFeed(urlsFileName, timeout, waittime);
       return new RssConsumer(systemName, feed, registry);
   }
 

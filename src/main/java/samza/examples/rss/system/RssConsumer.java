@@ -25,6 +25,10 @@ import org.apache.samza.system.IncomingMessageEnvelope;
 import org.apache.samza.system.SystemStreamPartition;
 import org.apache.samza.util.BlockingEnvelopeMap;
 import samza.examples.orders.system.OrdersFeed.OrdersFeedRow;
+import samza.examples.rss.utils.Datum;
+
+import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 
 public class RssConsumer extends BlockingEnvelopeMap {
     private final String systemName;
@@ -49,6 +53,9 @@ public class RssConsumer extends BlockingEnvelopeMap {
     public void start() {
         feed.start();
         try {
+            //rss should start polling
+            BlockingQueue<Datum> nextBatch = feed.getNextBatch();
+            //// every entry on the polled queue should be send as a message
 //            OrdersFeedRow row = (OrdersFeedRow) feed.getNext();
 //            while (row != null) {
 //                put(systemStreamPartition, new IncomingMessageEnvelope(

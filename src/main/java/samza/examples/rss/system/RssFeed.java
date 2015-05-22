@@ -19,78 +19,87 @@
 
 package samza.examples.rss.system;
 
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.charset.Charset;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
-import java.sql.Connection;
-import java.sql.Date;
-import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URL;
+import java.net.URLConnection;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.prefs.Preferences;
 
-import org.apache.samza.SamzaException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.collect.Sets;
+import com.sun.syndication.feed.synd.SyndEntry;
+import com.sun.syndication.feed.synd.SyndFeed;
+import com.sun.syndication.io.FeedException;
+import com.sun.syndication.io.SyndFeedInput;
 import org.codehaus.jackson.map.ObjectMapper;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import samza.examples.rss.utils.Datum;
 import samza.examples.rss.utils.FeedDetails;
+import samza.examples.rss.utils.RFC3339Utils;
+import samza.examples.rss.utils.SyndEntrySerializer;
 
 public class RssFeed {
     private static final Logger log = LoggerFactory.getLogger(RssFeed.class);
     private static final ObjectMapper jsonMapper = new ObjectMapper();
 
-    private Connection con = null;
-    private Statement st = null;
-    private ResultSet rs = null;
     private final String urlsFilePath;
+    private final int timeOut;
+    private final int waitTime;
+    private List<FeedDetails> feedDetails;
+    private BlockingQueue<Datum> dataQueue;
+    private SyndEntrySerializer serializer;
+    private DateTime publishedSince;
 
-    public RssFeed(String urlsFilePath) {
+    private static final String RSS_KEY = "rssFeed";
+    private static final String URI_KEY = "uri";
+    private static final String LINK_KEY = "link";
+    private static final String DATE_KEY = "publishedDate";
+
+    protected static final Map<String, Set<String>> PREVIOUSLY_SEEN = new ConcurrentHashMap<>();
+
+    public RssFeed(String urlsFilePath, int timeOut, int waittime) {
         this.urlsFilePath = urlsFilePath;
+        this.timeOut = timeOut;
+        this.waitTime = waittime;
+        this.serializer = new SyndEntrySerializer();
+        this.dataQueue = new LinkedBlockingQueue<>();
+        // TODO pass this as a parameter?
+        this.publishedSince = new DateTime().withYear(2014)
+                .withDayOfMonth(5).withMonthOfYear(9)
+                .withZone(DateTimeZone.UTC);
     }
 
     public void start() {
-        BlockingQueue<FeedDetails> feedDetails = readUrlFile();
-        while(!feedDetails.isEmpty()) {
-            System.out.println(feedDetails.poll());
-        }
-//        String url = "jdbc:mysql://" + host + ":" + String.valueOf(port) + "/"
-//                + database;
-//        try {
-//            Class.forName("com.mysql.jdbc.Driver");
-//            con = DriverManager.getConnection(url, user, password);
-//            st = con.createStatement();
-//            rs = st.executeQuery("SELECT * FROM `order`");
-//        } catch (SQLException e) {
-//            log.error(e.getMessage());
-//            e.printStackTrace();
-//        } catch (ClassNotFoundException e) {
-//            log.error("Error while starting.");
-//            e.printStackTrace();
-//        }
+        feedDetails = readUrlFile();
     }
 
-    private BlockingQueue<FeedDetails> readUrlFile() {
-        BlockingQueue<FeedDetails> rssQueue = new LinkedBlockingQueue<FeedDetails>();
+    /**
+     * Reads assigned URLs file from classpath
+     * @return
+     */
+    private List<FeedDetails> readUrlFile() {
+        List<FeedDetails> rssQueue = new ArrayList<>();
         try {
-            List<String> readAllLines = Files.readAllLines(FileSystems
-                    .getDefault().getPath(this.urlsFilePath), Charset.defaultCharset());
-            for (String line : readAllLines) {
+            InputStream in = this.getClass().getClassLoader().getResourceAsStream(this.urlsFilePath);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+            String line;
+            while ((line = reader.readLine()) != null) {
                 if (!line.startsWith("#")) {
                     String[] split = line.split(",");
-                    rssQueue.put(new FeedDetails(split[0], split[1]));
+                    rssQueue.add(new FeedDetails(split[0], split[1]));
                 }
             }
+            reader.close();
         } catch (IOException e) {
-            log.error("Error while reading RSS list file.");
-            e.printStackTrace();
-        } catch (InterruptedException e) {
             log.error("Error while reading RSS list file.");
             e.printStackTrace();
         }
@@ -98,171 +107,152 @@ public class RssFeed {
     }
 
     public void stop() {
-        try {
-            if (rs != null) {
-                rs.close();
-            }
-            if (st != null) {
-                st.close();
-            }
-            if (con != null) {
-                con.close();
-            }
-
-        } catch (SQLException ex) {
-            log.error(ex.getMessage());
-            ex.printStackTrace();
-        }
+        log.info("Stoping RssFeed consumer.");
     }
 
-    public OrdersFeedRow getNext() {
-        OrdersFeedRow or = null;
-        try {
-            if (rs.next()) {
-                or = new OrdersFeedRow(rs.getLong(1), rs.getLong(2),
-                        rs.getLong(3), rs.getDate(4), rs.getLong(5));
-            }
-        } catch (SQLException e) {
-            log.error("Error in getNext.");
-            e.printStackTrace();
-        }
-        return or;
-    }
-
-    public static final class OrdersFeedRow {
-
-        private final String tableName = "order";
-        private final long orderId;
-        private final long customerId;
-        private final long branchId;
-        private final Date orderDate;
-        private final long status;
-
-        public OrdersFeedRow(long orderId, long customerId, long branchId,
-                            Date orderDate, long status) {
-            super();
-            this.orderId = orderId;
-            this.customerId = customerId;
-            this.branchId = branchId;
-            this.orderDate = orderDate;
-            this.status = status;
-        }
-
-        @Override
-        public int hashCode() {
-            final int prime = 31;
-            int result = 1;
-            result = prime * result + (int) (branchId ^ (branchId >>> 32));
-            result = prime * result + (int) (customerId ^ (customerId >>> 32));
-            result = prime * result
-                    + ((orderDate == null) ? 0 : orderDate.hashCode());
-            result = prime * result + (int) (orderId ^ (orderId >>> 32));
-            result = prime * result + (int) (status ^ (status >>> 32));
-            return result;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (obj == null) {
-                return false;
-            }
-            if (getClass() != obj.getClass()) {
-                return false;
-            }
-            OrdersFeedRow other = (OrdersFeedRow) obj;
-            if (branchId != other.branchId) {
-                return false;
-            }
-            if (customerId != other.customerId) {
-                return false;
-            }
-            if (orderDate == null) {
-                if (other.orderDate != null) {
-                    return false;
-                }
-            } else if (!orderDate.equals(other.orderDate)) {
-                return false;
-            }
-            if (orderId != other.orderId) {
-                return false;
-            }
-            if (status != other.status) {
-                return false;
-            }
-            return true;
-        }
-
-        @Override
-        public String toString() {
-            return "OrderFeedEvent [order_id=" + orderId + ", customer_id="
-                    + customerId + "," + " branch_id=" + branchId
-                    + ", order_date=" + orderDate + ", status=" + status + "]";
-        }
-
-        public String toJson() {
-            return toJson(this);
-        }
-
-        public static Map<String, Object> toMap(OrdersFeedRow event) {
-            Map<String, Object> jsonObject = new HashMap<String, Object>();
-
-            jsonObject.put("order_id", event.getOrderId());
-            jsonObject.put("customer_id", event.getCustomerId());
-            jsonObject.put("branch_id", event.getBranchId());
-            jsonObject.put("order_date", event.getOrderDate());
-            jsonObject.put("status", event.getStatus());
-
-            return jsonObject;
-        }
-
-        public static String toJson(OrdersFeedRow event) {
-            Map<String, Object> jsonObject = toMap(event);
-
+    /**
+     * Gets the next batch of feeds from URLs
+     * @return
+     */
+    public Set<String> getNextBatch() {
+        FeedDetails feedDetail = null;
+        Set<String> batch = Sets.newConcurrentHashSet();
+        Iterator<FeedDetails> it = feedDetails.iterator();
+        while(it.hasNext()) {
             try {
-                return jsonMapper.writeValueAsString(jsonObject);
-            } catch (Exception e) {
-                throw new SamzaException(e);
+                feedDetail = it.next();
+                // if enough time has passed, then read again
+                long elapsedTime = (System.currentTimeMillis() - feedDetail.getLastPolled()) / 1000;
+                if (elapsedTime > feedDetail.getPollIntervalMillis()) {
+                    // logging previously seen feeds
+                    queueFeedEntries(feedDetail, batch);
+                    PREVIOUSLY_SEEN.put(feedDetail.getUrl(), batch);
+                    // updating previously seen feeds
+                    feedDetail.setLastPolled(System.currentTimeMillis());
+                } else {
+                    log.info(feedDetail.getUrl() + " has been already polled.");
+                    this.waiting(this.waitTime);
+                }
+            } catch (IOException e) {
+                log.error("Error while reading data from RSS. " + feedDetail);
+                e.printStackTrace();
+            } catch (FeedException e) {
+                log.error("Error while reading data from RSS. " + feedDetail);
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                log.error("Error while reading data from RSS. " + feedDetail);
+                e.printStackTrace();
             }
         }
+        return batch;
+    }
 
-        public long getOrderId() {
-            return orderId;
+    /**
+     * Reads the url and queues the data
+     *
+     * @param feedDetail
+     *            feedDetails object
+     * @return set of all article urls that were read from the feed
+     * @throws IOException
+     *             when it cannot connect to the url or the url is malformed
+     * @throws com.sun.syndication.io.FeedException
+     *             when it cannot reed the feed.
+     */
+    protected Set<String> queueFeedEntries(FeedDetails feedDetail, Set<String> batch) throws IOException,
+            FeedException {
+        URL feedUrl = new URL(feedDetail.getUrl());
+        URLConnection connection = feedUrl.openConnection();
+        connection.setConnectTimeout(this.timeOut);
+        connection.setConnectTimeout(this.timeOut);
+        SyndFeedInput input = new SyndFeedInput();
+        SyndFeed feed = input.build(new InputStreamReader(connection
+                .getInputStream()));
+        for (Object entryObj : feed.getEntries()) {
+            SyndEntry entry = (SyndEntry) entryObj;
+            ObjectNode nodeEntry = this.serializer.deserialize(entry);
+            nodeEntry.put(RSS_KEY, feedDetail.getUrl());
+            String entryId = determineId(nodeEntry);
+            batch.add(entryId);
+            Datum datum = new Datum(nodeEntry);
+            try {
+                JsonNode published = nodeEntry.get(DATE_KEY);
+                if (published != null) {
+                    try {
+                        DateTime date = RFC3339Utils.parseToUTC(published.asText());
+                        if (date.isAfter(this.publishedSince)
+                                && (!seenBefore(entryId, feedDetail.getUrl()))) {
+                            this.dataQueue.put(datum);
+                            log.debug("Added entry, {}, to provider queue.", entryId);
+                        }
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    } catch (Exception e) {
+                        log.trace("Failed to parse date from object node, attempting to add node to queue by default.");
+                        if (!seenBefore(entryId, feedDetail.getUrl())) {
+                            this.dataQueue.put(datum);
+                            log.debug("Added entry, {}, to provider queue.", entryId);
+                        }
+                    }
+                } else {
+                    log.debug("No published date present, attempting to add node to queue by default.");
+                    if (!seenBefore(entryId, feedDetail.getUrl())) {
+                        this.dataQueue.put(datum);
+                        log.debug("Added entry, {}, to provider queue.",
+                                entryId);
+                    }
+                }
+            } catch (InterruptedException ie) {
+                log.error("Interupted Exception.");
+                Thread.currentThread().interrupt();
+            }
         }
+        return batch;
+    }
 
-        public long getCustomerId() {
-            return customerId;
-        }
-
-        public long getBranchId() {
-            return branchId;
-        }
-
-        public Date getOrderDate() {
-            return orderDate;
-        }
-
-        public long getStatus() {
-            return status;
-        }
-
-        public String getTableName() {
-            return tableName;
+    /**
+     * Safe waiting
+     *
+     * @param waitTime
+     * @throws InterruptedException
+     */
+    private void waiting(long waitTime) throws InterruptedException {
+        log.warn("Waiting for " + waitTime + " mlsecs.");
+        synchronized (this) {
+            this.wait(waitTime);
         }
     }
 
-    public static void main(String[] args) throws InterruptedException {
-//
-        RssFeed feed = new RssFeed("/Users/renatomarroquin/Documents/workspace/workspaceApache/hello-samza/src/main/resources/rss.file");
-        feed.start();
-//        feed.start();
-//        OrdersFeedRow or = feed.getNext();
-//        while(or != null) {
-//            System.out.println(or.toJson());
-//            or = feed.getNext();
-//        }
-//        feed.stop();
+    /**
+     * Returns a link to the article to use as the id
+     *
+     * @param node
+     * @return
+     */
+    private String determineId(ObjectNode node) {
+        String id = null;
+        if (node.get(URI_KEY) != null
+                && !node.get(URI_KEY).textValue().equals("")) {
+            id = node.get(URI_KEY).textValue();
+        } else if (node.get(LINK_KEY) != null
+                && !node.get(LINK_KEY).textValue().equals("")) {
+            id = node.get(LINK_KEY).textValue();
+        }
+        return id;
+    }
+
+    /**
+     * Returns false if the artile was previously seen in another task for this
+     * feed
+     *
+     * @param id
+     * @param rssFeed
+     * @return
+     */
+    private boolean seenBefore(String id, String rssFeed) {
+        Set<String> previousBatch = PREVIOUSLY_SEEN.get(rssFeed);
+        if (previousBatch == null) {
+            return false;
+        }
+        return previousBatch.contains(id);
     }
 }
