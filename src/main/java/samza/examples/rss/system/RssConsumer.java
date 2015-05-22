@@ -39,25 +39,19 @@ public class RssConsumer extends BlockingEnvelopeMap {
         this.feed = feed;
     }
 
-    @Override
-    public void register(SystemStreamPartition systemStreamPartition,
-                         String startingOffset) {
-        this.systemStreamPartition= new SystemStreamPartition(systemName,
-                "rss", new Partition(0));
-        super.register(this.systemStreamPartition, startingOffset);
-    }
-
-    @Override
-    public void start() {
-        feed.start();
+    public void onIncommingBatch(List<Datum> nextBatch) {
         try {
             //rss should start polling
-            List<Datum> nextBatch = feed.getNextBatch();
+//            List<Datum> nextBatch = feed.getNextBatch();
             //// every entry on the polled queue should be send as a message
             if (nextBatch != null) {
-                for (Datum data : nextBatch) {
-                    put(systemStreamPartition, new IncomingMessageEnvelope(
-                        systemStreamPartition, null, null, data));
+                if (!nextBatch.isEmpty()) {
+                    System.out.println("Putting data into partitions");
+                    for (Datum data : nextBatch) {
+                        System.out.println("====" + data.toString());
+                        put(systemStreamPartition, new IncomingMessageEnvelope(
+                                systemStreamPartition, null, null, data));
+                    }
                 }
             } else {
                 throw new IllegalStateException("The RSS batch should not be null");
@@ -65,6 +59,18 @@ public class RssConsumer extends BlockingEnvelopeMap {
         } catch (Exception e) {
             System.err.println(e);
         }
+    }
+
+    @Override
+    public void register(SystemStreamPartition systemStreamPartition,
+                         String startingOffset) {
+        this.systemStreamPartition= new SystemStreamPartition(systemName, "rss", new Partition(0));
+        super.register(this.systemStreamPartition, startingOffset);
+    }
+
+    @Override
+    public void start() {
+        feed.start(this);
     }
 
     @Override

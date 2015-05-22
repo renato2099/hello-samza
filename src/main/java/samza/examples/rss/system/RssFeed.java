@@ -53,6 +53,8 @@ public class RssFeed {
     private List<FeedDetails> feedDetails;
     private SyndEntrySerializer serializer;
     private DateTime publishedSince;
+    private RssConsumer rssConsumer;
+    private boolean workFlag;
 
     private static final String RSS_KEY = "rssFeed";
     private static final String URI_KEY = "uri";
@@ -80,9 +82,15 @@ public class RssFeed {
 
     /**
      * Starts the feed reader
+     * @param rssConsumer
      */
-    public void start() {
+    public void start(RssConsumer rssConsumer) {
+        // load urls to be read
         feedDetails = readUrlFile();
+        this.setConsumer(rssConsumer);
+        this.workFlag = true;
+        // start polling from urls
+        checkForNewEntries();
     }
 
     /**
@@ -110,10 +118,17 @@ public class RssFeed {
         return rssQueue;
     }
 
+    private void checkForNewEntries() {
+        while(workFlag) {
+            this.rssConsumer.onIncommingBatch(getNextBatch());
+        }
+    }
+
     /**
      * Stops the feed reader
      */
     public void stop() {
+        this.workFlag = false;
         log.info("Stoping RssFeed consumer.");
     }
 
@@ -131,8 +146,9 @@ public class RssFeed {
             try {
                 feedDetail = it.next();
                 // if enough time has passed, then read again
-                long elapsedTime = (System.currentTimeMillis() - feedDetail.getLastPolled()) / 1000;
-                if (elapsedTime > feedDetail.getPollIntervalMillis()) {
+                long elapsedTime = (System.currentTimeMillis() - feedDetail.getLastPolled())/1000;
+                if (elapsedTime > feedDetail.getPollIntervalMillis()*60) {
+                    log.info(feedDetail.getUrl() + " polling.");
                     // logging previously seen feeds
                     batch = queueFeedEntries(feedDetail, dataQueue);
                     PREVIOUSLY_SEEN.put(feedDetail.getUrl(), batch);
@@ -253,5 +269,23 @@ public class RssFeed {
             return false;
         }
         return previousBatch.contains(id);
+    }
+
+    /**
+     * Registers a new rssConsumer to whom entries can be delivered.
+     * @param rssConsumer
+     */
+    public void setConsumer(RssConsumer rssConsumer) {
+        this.rssConsumer = rssConsumer;
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        RssFeed feed = new RssFeed("/Users/renatomarroquin/Documents/workspace/workspaceApache/hello-samza/src/main/resources/rss.file", 3000, 10000);
+        feed.start(new RssConsumer("rss", feed, null));
+
+        feed.checkForNewEntries();
+
+        Thread.sleep(20000);
+        feed.stop();
     }
 }

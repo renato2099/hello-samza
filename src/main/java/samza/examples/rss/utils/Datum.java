@@ -107,7 +107,6 @@ public class Datum implements Serializable {
         this.document = document;
     }
 
-
     public String getId(){
         return id;
     }
@@ -148,8 +147,8 @@ public class Datum implements Serializable {
 
         jsonObject.put("id", event.getId());
         jsonObject.put("document", event.getDocument());
-        jsonObject.put("metadata", event.getMetadata());
-        jsonObject.put("sequence_id", event.getSequenceid());
+//        jsonObject.put("metadata", event.getMetadata());
+//        jsonObject.put("sequence_id", event.getSequenceid());
         jsonObject.put("timestamp", event.getTimestamp());
 
         return jsonObject;
