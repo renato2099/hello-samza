@@ -179,7 +179,7 @@ public class RssFeed {
             nodeEntry.put(RSS_KEY, feedDetail.getUrl());
             String entryId = determineId(nodeEntry);
             batch.add(entryId);
-            Datum datum = new Datum(nodeEntry);
+            Datum datum = new Datum(nodeEntry, entryId, DateTime.now());
             JsonNode published = nodeEntry.get(DATE_KEY);
             if (published != null) {
                 try {
