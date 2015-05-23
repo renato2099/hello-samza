@@ -25,7 +25,6 @@ import org.apache.samza.system.SystemStream;
 import org.apache.samza.task.MessageCollector;
 import org.apache.samza.task.StreamTask;
 import org.apache.samza.task.TaskCoordinator;
-import samza.examples.orders.system.OrdersFeed.OrdersFeedRow;
 import samza.examples.rss.utils.Datum;
 
 import java.util.Map;

@@ -32,11 +32,14 @@ public class RssConsumer extends BlockingEnvelopeMap {
     private final String systemName;
     private final RssFeed feed;
     SystemStreamPartition systemStreamPartition;
+    private Thread thread = null;
 
     public RssConsumer(String systemName, RssFeed feed,
                          MetricsRegistry registry) {
         this.systemName = systemName;
         this.feed = feed;
+        this.feed.start(this);
+        this.thread = new Thread(this.feed);
     }
 
     public void onIncommingBatch(List<Datum> nextBatch) {
@@ -44,9 +47,7 @@ public class RssConsumer extends BlockingEnvelopeMap {
             //// every entry on the polled queue should be send as a message
             if (nextBatch != null) {
                 if (!nextBatch.isEmpty()) {
-                    System.out.println("Putting data into partitions");
                     for (Datum data : nextBatch) {
-                        System.out.println("====" + data.toString());
                         put(systemStreamPartition, new IncomingMessageEnvelope(
                                 systemStreamPartition, null, null, data));
                     }
@@ -68,11 +69,18 @@ public class RssConsumer extends BlockingEnvelopeMap {
 
     @Override
     public void start() {
-        feed.start(this);
+        // start the thread that will be consuming data
+        this.thread.start();
     }
 
     @Override
     public void stop() {
-        feed.stop();
+        try {
+            System.out.println("+++++++++++++++++++++++++++++++");
+            this.feed.stop();
+            this.thread.join();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 }

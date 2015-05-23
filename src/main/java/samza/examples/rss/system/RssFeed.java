@@ -44,7 +44,7 @@ import samza.examples.rss.utils.FeedDetails;
 import samza.examples.rss.utils.RFC3339Utils;
 import samza.examples.rss.utils.SyndEntrySerializer;
 
-public class RssFeed {
+public class RssFeed implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(RssFeed.class);
 
     private final String urlsFilePath;
@@ -89,8 +89,17 @@ public class RssFeed {
         feedDetails = readUrlFile();
         this.setConsumer(rssConsumer);
         this.workFlag = true;
+    }
+
+    public void run() {
         // start polling from urls
         checkForNewEntries();
+    }
+
+    private void checkForNewEntries() {
+        while(workFlag) {
+            this.rssConsumer.onIncommingBatch(getNextBatch());
+        }
     }
 
     /**
@@ -116,12 +125,6 @@ public class RssFeed {
             e.printStackTrace();
         }
         return rssQueue;
-    }
-
-    private void checkForNewEntries() {
-        while(workFlag) {
-            this.rssConsumer.onIncommingBatch(getNextBatch());
-        }
     }
 
     /**
@@ -159,13 +162,13 @@ public class RssFeed {
                     this.waiting(this.waitTime);
                 }
             } catch (IOException e) {
-                log.error("Error while reading data from RSS. " + feedDetail);
+                log.error("Error while reading data from RSS. IOException. " + feedDetail.getUrl());
                 e.printStackTrace();
             } catch (FeedException e) {
-                log.error("Error while reading data from RSS. " + feedDetail);
+                log.error("Error while reading data from RSS. FeedException. " + feedDetail.getUrl());
                 e.printStackTrace();
             } catch (InterruptedException e) {
-                log.error("Error while reading data from RSS. " + feedDetail);
+                log.error("Error while reading data from RSS. InterruptedException." + feedDetail);
                 e.printStackTrace();
             }
         }
@@ -184,7 +187,6 @@ public class RssFeed {
             FeedException {
         URL feedUrl = new URL(feedDetail.getUrl());
         URLConnection connection = feedUrl.openConnection();
-        connection.setConnectTimeout(this.timeOut);
         connection.setConnectTimeout(this.timeOut);
         SyndFeedInput input = new SyndFeedInput();
         SyndFeed feed = input.build(new InputStreamReader(connection.getInputStream()));
