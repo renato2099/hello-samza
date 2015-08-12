@@ -27,3 +27,6 @@ target/
 *.iws
 */.cache
 deploy
+*.swp
+build/
+.gradle/
